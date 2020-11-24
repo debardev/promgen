@@ -5,8 +5,11 @@ import logging
 import os
 from urllib.parse import urljoin
 
+import yaml
 from atomicwrites import atomic_write
 from celery import shared_task
+from kubernetes import client, config
+from kubernetes.client.rest import ApiException
 
 from promgen import models, prometheus, util, notification
 
@@ -134,9 +137,64 @@ def write_config(path=None, reload=True, chmod=0o644):
 def write_rules(path=None, reload=True, chmod=0o644):
     if path is None:
         path = util.setting("prometheus:rules")
-    with atomic_write(path, mode="wb", overwrite=True) as fp:
-        # Set mode on our temporary file before we write and move it
-        os.chmod(fp.name, chmod)
-        fp.write(prometheus.render_rules())
+    config_type = util.setting("prometheus:config.type") or "yaml"
+
+    rendered_rules = prometheus.render_rules()
+    if config_type == "configmap":
+        namespace = util.setting("prometheus:kubernetes:namespace")
+        config.load_incluster_config()
+
+        api_instance = client.CustomObjectsApi(client.ApiClient())
+
+        yaml_data = {
+            "apiVersion": "monitoring.coreos.com/v1",
+            "kind": "PrometheusRule",
+            "metadata": {
+                "name": "promgen-rules",
+                "namespace": namespace
+            },
+            "spec": yaml.load(rendered_rules.decode(), Loader=yaml.FullLoader)
+        }
+
+        print(yaml_data)
+
+        try:
+            crd = api_instance.get_namespaced_custom_object(
+                group="monitoring.coreos.com",
+                version="v1",
+                plural="prometheusrules",
+                name="promgen-rules",
+                namespace=namespace,
+                async_req=False
+            )
+            print(crd)
+            yaml_data["metadata"]["resourceVersion"] = "%s" % crd.get("metadata")['resourceVersion']
+            print(yaml_data)
+            api_response = api_instance.replace_namespaced_custom_object(
+                group="monitoring.coreos.com",
+                version="v1",
+                plural="prometheusrules",
+                name="promgen-rules",
+                namespace=namespace,
+                body=yaml_data
+            )
+            print(api_response)
+
+        except ApiException as e:
+            print("Exception when calling CoreV1Api->read/replace_namespaced_custom_object: %s\n" % e)
+            if e.status == 404:
+                api_instance.create_namespaced_custom_object(
+                    group="monitoring.coreos.com",
+                    version="v1",
+                    plural="prometheusrules",
+                    namespace=namespace,
+                    body=yaml_data
+                )
+    else:
+        with atomic_write(path, mode="wb", overwrite=True) as fp:
+            # Set mode on our temporary file before we write and move it
+            os.chmod(fp.name, chmod)
+            fp.write(rendered_rules)
+
     if reload:
         reload_prometheus()

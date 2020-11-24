@@ -44,6 +44,7 @@ setup(
         'requests==2.22.0',
         'sentry_sdk',
         'social-auth-app-django >= 2.0.0',
+        'kubernetes==12.0.1'
     ],
     include_package_data=True,
     extras_require={

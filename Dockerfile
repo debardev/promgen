@@ -1,5 +1,6 @@
 FROM python:3.6.9-alpine
 LABEL maintainer=paul.traylor@linecorp.com
+LABEL second_maintainer=denis.barleben@kobil.com
 
 ENV PROMETHEUS_VERSION 2.11.1
 ENV PROMETHEUS_DOWNLOAD_URL https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz
