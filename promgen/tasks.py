@@ -139,58 +139,70 @@ def write_rules(path=None, reload=True, chmod=0o644):
         path = util.setting("prometheus:rules")
     config_type = util.setting("prometheus:config.type") or "yaml"
 
-    rendered_rules = prometheus.render_rules()
     if config_type == "configmap":
+        rendered_rules = yaml.load(prometheus.render_rules().decode(), Loader=yaml.FullLoader)
+
         namespace = util.setting("prometheus:kubernetes:namespace")
-        config.load_incluster_config()
+
+        k8s_config_type = util.setting("prometheus:kubernetes:config.type") or "kube"
+
+        if k8s_config_type == "incluster":
+            config.load_incluster_config()
+        else:
+            config.load_kube_config()
 
         api_instance = client.CustomObjectsApi(client.ApiClient())
 
-        yaml_data = {
-            "apiVersion": "monitoring.coreos.com/v1",
-            "kind": "PrometheusRule",
-            "metadata": {
-                "name": "promgen-rules",
-                "namespace": namespace
-            },
-            "spec": yaml.load(rendered_rules.decode(), Loader=yaml.FullLoader)
-        }
+        for group in rendered_rules['groups']:
 
-        print(yaml_data)
+            ruleset_name = "promgen-rules-%s" % group['name'].lower()
 
-        try:
-            crd = api_instance.get_namespaced_custom_object(
-                group="monitoring.coreos.com",
-                version="v1",
-                plural="prometheusrules",
-                name="promgen-rules",
-                namespace=namespace,
-                async_req=False
-            )
-            print(crd)
-            yaml_data["metadata"]["resourceVersion"] = "%s" % crd.get("metadata")['resourceVersion']
-            print(yaml_data)
-            api_response = api_instance.replace_namespaced_custom_object(
-                group="monitoring.coreos.com",
-                version="v1",
-                plural="prometheusrules",
-                name="promgen-rules",
-                namespace=namespace,
-                body=yaml_data
-            )
-            print(api_response)
+            yaml_data = {
+                "apiVersion": "monitoring.coreos.com/v1",
+                "kind": "PrometheusRule",
+                "metadata": {
+                    "name": ruleset_name,
+                    "namespace": namespace,
+                    "labels": {
+                        "app.kubernetes.io/managed-by": "promgen"
+                    }
+                },
+                "spec": {'groups': [group]}
+            }
 
-        except ApiException as e:
-            print("Exception when calling CoreV1Api->read/replace_namespaced_custom_object: %s\n" % e)
-            if e.status == 404:
-                api_instance.create_namespaced_custom_object(
+            try:
+                crd = api_instance.get_namespaced_custom_object(
                     group="monitoring.coreos.com",
                     version="v1",
                     plural="prometheusrules",
+                    name=ruleset_name,
+                    namespace=namespace,
+                    async_req=False
+                )
+
+                yaml_data["metadata"]["resourceVersion"] = "%s" % crd.get("metadata")['resourceVersion']
+
+                api_instance.replace_namespaced_custom_object(
+                    group="monitoring.coreos.com",
+                    version="v1",
+                    plural="prometheusrules",
+                    name=ruleset_name,
                     namespace=namespace,
                     body=yaml_data
                 )
+
+            except ApiException as e:
+                print("Exception when calling CoreV1Api->read/replace_namespaced_custom_object: %s\n" % e)
+                if e.status == 404:
+                    api_instance.create_namespaced_custom_object(
+                        group="monitoring.coreos.com",
+                        version="v1",
+                        plural="prometheusrules",
+                        namespace=namespace,
+                        body=yaml_data
+                    )
     else:
+        rendered_rules = prometheus.render_rules()
         with atomic_write(path, mode="wb", overwrite=True) as fp:
             # Set mode on our temporary file before we write and move it
             os.chmod(fp.name, chmod)
