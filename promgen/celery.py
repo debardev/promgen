@@ -37,7 +37,7 @@ def rules_watch_task(self):
     from promgen import util, models
     from promgen.prometheus import import_rules_v2
 
-    k8s_config_type = util.setting("prometheus:kubernetes:config.type") or "kube"
+    k8s_config_type = util.setting("kubernetes:config.type") or "kube"
 
     if k8s_config_type == "incluster":
         config.load_incluster_config()
@@ -46,7 +46,7 @@ def rules_watch_task(self):
 
     w = watch.Watch()
     api_instance = client.CustomObjectsApi(client.ApiClient())
-    namespace = util.setting("prometheus:kubernetes:namespace") or "default"
+    namespace = util.setting("kubernetes:namespace") or "default"
     for event in w.stream(api_instance.list_namespaced_custom_object, group="monitoring.coreos.com", version="v1",
                           plural="prometheusrules", namespace=namespace):
         if event['type'] == 'ADDED':

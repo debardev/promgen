@@ -62,7 +62,7 @@ def render_rules(rules=None):
     other related objects that are mostly used for the sub lookups.
     '''
     if rules is None:
-        rules = models.Rule.objects.filter(enabled=True)
+        rules = models.Rule.objects.all()
 
     return renderers.RuleRenderer().render(
         serializers.AlertRuleSerializer(rules, many=True).data

@@ -139,12 +139,12 @@ def write_rules(path=None, reload=True, chmod=0o644):
         path = util.setting("prometheus:rules")
     config_type = util.setting("prometheus:config.type") or "yaml"
 
-    if config_type == "configmap":
+    if config_type == "prometheusrule":
         rendered_rules = yaml.load(prometheus.render_rules().decode(), Loader=yaml.FullLoader)
 
-        namespace = util.setting("prometheus:kubernetes:namespace")
+        namespace = util.setting("kubernetes:namespace")
 
-        k8s_config_type = util.setting("prometheus:kubernetes:config.type") or "kube"
+        k8s_config_type = util.setting("kubernetes:config.type") or "kube"
 
         if k8s_config_type == "incluster":
             config.load_incluster_config()
@@ -182,18 +182,24 @@ def write_rules(path=None, reload=True, chmod=0o644):
 
                 yaml_data["metadata"]["resourceVersion"] = "%s" % crd.get("metadata")['resourceVersion']
 
-                api_instance.replace_namespaced_custom_object(
-                    group="monitoring.coreos.com",
-                    version="v1",
-                    plural="prometheusrules",
-                    name=ruleset_name,
-                    namespace=namespace,
-                    body=yaml_data
-                )
+                if group['rules']:
+                    api_instance.replace_namespaced_custom_object(
+                        group="monitoring.coreos.com",
+                        version="v1",
+                        plural="prometheusrules",
+                        name=ruleset_name,
+                        namespace=namespace,
+                        body=yaml_data
+                    )
+                else:
+                    api_instance.delete_namespaced_custom_object(name=ruleset_name,
+                                                                 group="monitoring.coreos.com",
+                                                                 version="v1",
+                                                                 plural="prometheusrules",
+                                                                 namespace=namespace)
 
             except ApiException as e:
-                print("Exception when calling CoreV1Api->read/replace_namespaced_custom_object: %s\n" % e)
-                if e.status == 404:
+                if e.status == 404 and group['rules']:
                     api_instance.create_namespaced_custom_object(
                         group="monitoring.coreos.com",
                         version="v1",
@@ -201,6 +207,8 @@ def write_rules(path=None, reload=True, chmod=0o644):
                         namespace=namespace,
                         body=yaml_data
                     )
+                else:
+                    print("Exception when calling CustomObjectsApi: %s\n" % e)
     else:
         rendered_rules = prometheus.render_rules()
         with atomic_write(path, mode="wb", overwrite=True) as fp:

@@ -3,6 +3,7 @@
 
 import yaml
 from rest_framework import renderers
+from promgen import models
 
 
 # https://www.django-rest-framework.org/api-guide/renderers/#custom-renderers
@@ -13,7 +14,10 @@ class RuleRenderer(renderers.BaseRenderer):
 
     def render(self, data, media_type=None, renderer_context=None):
         return yaml.safe_dump(
-            {"groups": [{"name": name, "rules": data[name]} for name in data]},
+            {"groups": [{"name": name,
+                         "rules": [rule for rule in data[name] if models.Rule.objects.filter(name=rule['alert'],
+                                                                                             enabled=True)]}
+                        for name in data]},
             default_flow_style=False,
             allow_unicode=True,
             encoding=self.charset,
