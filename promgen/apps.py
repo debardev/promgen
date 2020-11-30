@@ -5,6 +5,7 @@ import logging
 
 from django.apps import AppConfig
 from django.db.models.signals import post_migrate
+from promgen import util
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +18,8 @@ def default_admin(sender, interactive, **kwargs):
         if interactive:
             print('  Adding default admin user')
         User.objects.create_user(
-            username='admin',
-            password='admin',
+            username=util.setting("superuser:username", 'admin'),
+            password=util.setting("superuser:password", 'admin'),
             is_staff=True,
             is_active=True,
             is_superuser=True,
@@ -28,15 +29,23 @@ def default_admin(sender, interactive, **kwargs):
 
 
 def default_shard(sender, apps, interactive, **kwargs):
-    Shard = apps.get_model('promgen.Shard')
-    if Shard.objects.count() == 0:
+    shard_model = apps.get_model('promgen.Shard')
+    if shard_model.objects.count() == 0:
         if interactive:
             print('  Adding default shard')
-        Shard.objects.create(
+        new_shard = shard_model.objects.create(
             name='Default',
-            url='http://prometheus.example.com',
+            url=util.setting("default.shard:url", 'http://prometheus.example.com'),
             proxy=True,
             enabled=True,
+        )
+        prometheus_model = apps.get_model('promgen.Prometheus')
+        if interactive:
+            print('  Adding default prometheus')
+        prometheus_model.objects.create(
+            shard=new_shard,
+            host=util.setting("default.shard:queue", 'promgen'),
+            port=80
         )
 
 

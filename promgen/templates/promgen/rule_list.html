@@ -23,7 +23,7 @@
 
   <table class="table table-bordered table-condensed">
     {% include "promgen/rule_header.html" %}
-    {% include "promgen/rule_block.html" with rule_list=group.list %}
+    {% include "promgen/rule_block.html" with rule_list=group.list toggle=1 %}
   </table>
 </div>
 {% endfor %}
