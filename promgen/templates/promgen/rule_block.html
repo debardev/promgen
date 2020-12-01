@@ -18,7 +18,7 @@
   <td {% if not rule.enabled %}class="bg-disabled text-muted" {% endif %} style="word-break: break-word;">{{ rule.clause }}</td>
 
   <td>{{ rule.duration }}</td>
-
+  <td>{{ rule.type }}</td>
   {% if toggle %}
   <td style="white-space: nowrap">
     <input type="checkbox" {% if rule.enabled %}checked{% endif %} data-size="mini" data-toggle="toggle" data-csrfmiddlewaretoken="{{csrf_token}}"

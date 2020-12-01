@@ -3,7 +3,7 @@
 
 from django.core.management.base import BaseCommand
 
-from promgen.models import Shard, Prometheus
+from promgen.models import Shard, Queue
 
 
 class Command(BaseCommand):
@@ -17,7 +17,7 @@ class Command(BaseCommand):
         if created:
             self.stdout.write('Created shard ' + shard.name)
 
-        server, created = Prometheus.objects.get_or_create(
+        server, created = Queue.objects.get_or_create(
             host=host,
             port=port,
             defaults={'shard': shard}

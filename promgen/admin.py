@@ -9,7 +9,7 @@ from promgen import models, plugins
 
 
 class PrometheusInline(admin.TabularInline):
-    model = models.Prometheus
+    model = models.Queue
 
 class FilterInline(admin.TabularInline):
     model = models.Filter
@@ -107,7 +107,7 @@ class RuleAnnotationInline(admin.TabularInline):
 
 @admin.register(models.Rule)
 class RuleAdmin(admin.ModelAdmin):
-    list_display = ('name', 'clause', 'duration', 'content_object')
+    list_display = ('name', 'type', 'clause', 'duration', 'content_object')
     list_filter = ('duration',)
     list_select_related = ('content_type',)
     inlines = [RuleLabelInline, RuleAnnotationInline]
@@ -117,9 +117,9 @@ class RuleAdmin(admin.ModelAdmin):
         return qs.prefetch_related('content_object',)
 
 
-@admin.register(models.Prometheus)
-class PrometheusAdmin(admin.ModelAdmin):
-    list_display = ('shard', 'host', 'port')
+@admin.register(models.Queue)
+class QueuesAdmin(admin.ModelAdmin):
+    list_display = ('shard', 'name')
     list_filter = ('shard',)
 
 

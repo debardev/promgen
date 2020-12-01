@@ -5,15 +5,51 @@ import logging
 
 from django.apps import AppConfig
 from django.db.models.signals import post_migrate
-from promgen import util
+from promgen import util, settings
 
 logger = logging.getLogger(__name__)
 
 
-def default_admin(sender, interactive, **kwargs):
+def create_group(apps):
+    if not settings.PROMGEN_DEFAULT_GROUP:
+        return
+
+    # Create Default Group
+    group, created = apps.get_model('auth', 'Group').objects.get_or_create(
+        name=settings.PROMGEN_DEFAULT_GROUP
+    )
+
+    # Create default permissions. We skip the permissions that are
+    # generally for admin rules (Shards, Prometheus, Audit) and skip
+    # custom permissions for label/annotations but list everything else
+    Permission = apps.get_model('auth', 'Permission')
+    group.permissions.set(
+        Permission.objects.filter(
+            content_type__app_label='promgen',
+            content_type__model__in=[
+                'exporter',
+                'farm',
+                'host',
+                'project',
+                'rule',
+                'sender',
+                'service',
+                'url',
+            ],
+        )
+    )
+
+    # Add users to default group
+    User = apps.get_model('auth', 'User')
+    for user in User.objects.all():
+        user.groups.add(group)
+
+
+def default_admin(sender, apps, interactive, **kwargs):
     # Have to import here to ensure that the apps are already registered and
     # we get a real model instead of __fake__.User
     from django.contrib.auth.models import User
+    create_group(apps)
     if User.objects.filter(is_superuser=True).count() == 0:
         if interactive:
             print('  Adding default admin user')
@@ -39,13 +75,12 @@ def default_shard(sender, apps, interactive, **kwargs):
             proxy=True,
             enabled=True,
         )
-        prometheus_model = apps.get_model('promgen.Prometheus')
+        prometheus_model = apps.get_model('promgen.Queue')
         if interactive:
-            print('  Adding default prometheus')
+            print('  Adding default queues')
         prometheus_model.objects.create(
             shard=new_shard,
-            host=util.setting("default.shard:queue", 'promgen'),
-            port=80
+            name=util.setting("default.shard:queue", 'promgen')
         )
 
 

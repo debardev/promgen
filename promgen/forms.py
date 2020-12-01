@@ -123,6 +123,7 @@ class AlertRuleForm(forms.ModelForm):
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'duration': forms.TextInput(attrs={'class': 'form-control'}),
+            'type': forms.Select(attrs={"class": "form-control"}),
             'clause': forms.Textarea(attrs={'rows': 5, 'class': 'form-control'}),
             'enabled': forms.CheckboxInput(attrs={'data-toggle': 'toggle', 'data-size': 'mini'}),
             'description': forms.Textarea(attrs={'rows': 5, 'class': 'form-control'}),

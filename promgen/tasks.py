@@ -137,84 +137,119 @@ def write_config(path=None, reload=True, chmod=0o644):
 def write_rules(path=None, reload=True, chmod=0o644):
     if path is None:
         path = util.setting("prometheus:rules")
-    config_type = util.setting("prometheus:config.type") or "yaml"
 
-    if config_type == "prometheusrule":
-        rendered_rules = yaml.load(prometheus.render_rules().decode(), Loader=yaml.FullLoader)
+    namespace = util.setting("kubernetes:namespace")
 
-        namespace = util.setting("kubernetes:namespace")
+    rendered_rules = yaml.load(prometheus.render_rules(
+        rules=models.Rule.objects.filter(type='prometheus')).decode(), Loader=yaml.FullLoader)
 
-        k8s_config_type = util.setting("kubernetes:config.type") or "kube"
+    k8s_config_type = util.setting("kubernetes:config.type") or "kube"
 
-        if k8s_config_type == "incluster":
-            config.load_incluster_config()
-        else:
-            config.load_kube_config()
+    if k8s_config_type == "incluster":
+        config.load_incluster_config()
+    else:
+        config.load_kube_config()
 
-        api_instance = client.CustomObjectsApi(client.ApiClient())
+    api_instance = client.CustomObjectsApi(client.ApiClient())
 
-        for group in rendered_rules['groups']:
+    for group in rendered_rules['groups']:
 
-            ruleset_name = "promgen-rules-%s" % group['name'].lower()
+        ruleset_name = "promgen-rules-%s" % group['name'].lower()
 
-            yaml_data = {
-                "apiVersion": "monitoring.coreos.com/v1",
-                "kind": "PrometheusRule",
-                "metadata": {
-                    "name": ruleset_name,
-                    "namespace": namespace,
-                    "labels": {
-                        "app.kubernetes.io/managed-by": "promgen"
-                    }
-                },
-                "spec": {'groups': [group]}
-            }
+        yaml_data = {
+            "apiVersion": "monitoring.coreos.com/v1",
+            "kind": "PrometheusRule",
+            "metadata": {
+                "name": ruleset_name,
+                "namespace": namespace,
+                "labels": {
+                    "app.kubernetes.io/managed-by": "promgen"
+                }
+            },
+            "spec": {'groups': [group]}
+        }
 
-            try:
-                crd = api_instance.get_namespaced_custom_object(
+        try:
+            crd = api_instance.get_namespaced_custom_object(
+                group="monitoring.coreos.com",
+                version="v1",
+                plural="prometheusrules",
+                name=ruleset_name,
+                namespace=namespace,
+                async_req=False
+            )
+
+            yaml_data["metadata"]["resourceVersion"] = "%s" % crd.get("metadata")['resourceVersion']
+
+            if group['rules']:
+                api_instance.replace_namespaced_custom_object(
                     group="monitoring.coreos.com",
                     version="v1",
                     plural="prometheusrules",
                     name=ruleset_name,
                     namespace=namespace,
-                    async_req=False
+                    body=yaml_data
                 )
+            else:
+                api_instance.delete_namespaced_custom_object(name=ruleset_name,
+                                                             group="monitoring.coreos.com",
+                                                             version="v1",
+                                                             plural="prometheusrules",
+                                                             namespace=namespace)
 
-                yaml_data["metadata"]["resourceVersion"] = "%s" % crd.get("metadata")['resourceVersion']
+        except ApiException as e:
+            if e.status == 404 and group['rules']:
+                api_instance.create_namespaced_custom_object(
+                    group="monitoring.coreos.com",
+                    version="v1",
+                    plural="prometheusrules",
+                    namespace=namespace,
+                    body=yaml_data
+                )
+            else:
+                print("Exception when calling CustomObjectsApi: %s\n" % e)
 
-                if group['rules']:
-                    api_instance.replace_namespaced_custom_object(
-                        group="monitoring.coreos.com",
-                        version="v1",
-                        plural="prometheusrules",
-                        name=ruleset_name,
-                        namespace=namespace,
-                        body=yaml_data
-                    )
-                else:
-                    api_instance.delete_namespaced_custom_object(name=ruleset_name,
-                                                                 group="monitoring.coreos.com",
-                                                                 version="v1",
-                                                                 plural="prometheusrules",
-                                                                 namespace=namespace)
+    rendered_rules = yaml.load(prometheus.render_rules(
+        rules=models.Rule.objects.filter(type='loki')).decode(), Loader=yaml.FullLoader)
 
-            except ApiException as e:
-                if e.status == 404 and group['rules']:
-                    api_instance.create_namespaced_custom_object(
-                        group="monitoring.coreos.com",
-                        version="v1",
-                        plural="prometheusrules",
-                        namespace=namespace,
-                        body=yaml_data
-                    )
-                else:
-                    print("Exception when calling CustomObjectsApi: %s\n" % e)
-    else:
-        rendered_rules = prometheus.render_rules()
-        with atomic_write(path, mode="wb", overwrite=True) as fp:
-            # Set mode on our temporary file before we write and move it
-            os.chmod(fp.name, chmod)
-            fp.write(rendered_rules)
+    api_instance = client.CoreV1Api(client.ApiClient())
+
+    for group in rendered_rules['groups']:
+
+        ruleset_name = "promgen-rules-%s" % group['name'].lower()
+
+        # Configureate ConfigMap metadata
+        metadata = client.V1ObjectMeta(
+            name=ruleset_name,
+            namespace=namespace,
+            labels={"app.kubernetes.io/managed-by": "promgen", "loki_rule": "1"}
+        )
+        # Instantiate the configmap object
+        configmap = client.V1ConfigMap(
+            api_version="v1",
+            kind="ConfigMap",
+            data=dict(rules=yaml.dump({'groups': [group]})),
+            metadata=metadata
+        )
+
+        try:
+            if group['rules']:
+                api_instance.replace_namespaced_config_map(
+                    name=ruleset_name,
+                    namespace=namespace,
+                    body=configmap
+                )
+            else:
+                api_instance.delete_namespaced_config_map(name=ruleset_name, namespace=namespace)
+
+        except ApiException as e:
+            if e.status == 404 and group['rules']:
+                api_instance.create_namespaced_config_map(
+                    namespace=namespace,
+                    body=configmap
+                )
+            else:
+                print("Exception when calling CoreV1Api: %s\n" % e)
 
     if reload:
         reload_prometheus()

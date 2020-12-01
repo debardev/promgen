@@ -7,6 +7,7 @@ import logging
 import socket
 
 import celery
+import yaml
 
 from celery.signals import celeryd_after_setup
 
@@ -69,6 +70,42 @@ def rules_watch_task(self):
                                                              plural="prometheusrules", namespace=namespace)
 
 
+@app.task(bind=True)
+def loki_rules_watch_task(self):
+    from promgen import util, models
+    from promgen.prometheus import import_rules_v2
+
+    k8s_config_type = util.setting("kubernetes:config.type") or "kube"
+
+    if k8s_config_type == "incluster":
+        config.load_incluster_config()
+    else:
+        config.load_kube_config()
+
+    w = watch.Watch()
+    api_instance = client.CoreV1Api(client.ApiClient())
+    namespace = util.setting("kubernetes:namespace") or "default"
+    for event in w.stream(api_instance.list_namespaced_config_map, namespace=namespace, label_selector="loki_rule=1",
+                          watch=True):
+        if event['type'] == 'ADDED':
+            obj = event['object']
+            for filename, data in obj.data.items():
+                configs = yaml.load(data, Loader=yaml.FullLoader)
+                for group in configs['groups']:
+                    service, created = models.Service.objects.get_or_create(
+                        name=group['name']
+                    )
+                    if created:
+                        logger.debug('Created service %s', service)
+
+                    counters = import_rules_v2({'groups': [group]}, service, of_type='loki')
+
+                    print("Imported: %s" % counters)
+                try:
+                    assert obj.metadata.labels['app.kubernetes.io/managed-by'] == "promgen"
+                except (KeyError, AssertionError):
+                    api_instance.delete_namespaced_config_map(name=obj.metadata.name, namespace=namespace)
+
 
 @celeryd_after_setup.connect
 def setup_direct_queue(sender, instance, **kwargs):
@@ -78,3 +115,4 @@ def setup_direct_queue(sender, instance, **kwargs):
     instance.app.amqp.queues.select_add(socket.gethostname())
     debug_task.apply_async(queue=socket.gethostname())
     rules_watch_task.apply_async(queue=socket.gethostname())
+    loki_rules_watch_task.apply_async(queue=socket.gethostname())

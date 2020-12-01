@@ -60,7 +60,7 @@ def run_once(signal):
 
 @run_once(trigger_write_config)
 def _trigger_write_config(signal, **kwargs):
-    targets = [server.host for server in models.Prometheus.objects.all()]
+    targets = [server.name for server in models.Queue.objects.all()]
     for target in targets:
         logger.info('Queueing write_config on %s', target)
         tasks.write_config.apply_async(queue=target)
@@ -71,7 +71,7 @@ def _trigger_write_config(signal, **kwargs):
 
 @run_once(trigger_write_rules)
 def _trigger_write_rules(signal, **kwargs):
-    targets = [server.host for server in models.Prometheus.objects.all()]
+    targets = [server.name for server in models.Queue.objects.all()]
     for target in targets:
         logger.info('Queueing write_rules on %s', target)
         tasks.write_rules.apply_async(queue=target)
@@ -82,7 +82,7 @@ def _trigger_write_rules(signal, **kwargs):
 
 @run_once(trigger_write_urls)
 def _trigger_write_urls(signal, **kwargs):
-    targets = [server.host for server in models.Prometheus.objects.all()]
+    targets = [server.name for server in models.Queue.objects.all()]
     for target in targets:
         logger.info('Queueing write_urls on %s', target)
         tasks.write_urls.apply_async(queue=target)

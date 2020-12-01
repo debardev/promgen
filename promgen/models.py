@@ -378,7 +378,13 @@ class URL(models.Model):
 class Rule(models.Model):
     objects = ObjectFilterManager()
 
-    name = models.CharField(max_length=128, unique=True, validators=[validators.metricname])
+    name = models.CharField(max_length=128, validators=[validators.metricname])
+    type = models.CharField(
+        max_length=16,
+        choices=(("loki", "loki"), ("prometheus", "prometheus")),
+        default="prometheus",
+        help_text="Type of the rule",
+    )
     clause = models.TextField(help_text='Prometheus query')
     duration = models.CharField(
         max_length=128, validators=[validators.duration],
@@ -591,15 +597,14 @@ class Audit(models.Model):
         return cls.objects.create(**kwargs)
 
 
-class Prometheus(models.Model):
+class Queue(models.Model):
     shard = models.ForeignKey('Shard', on_delete=models.CASCADE)
-    host = models.CharField(max_length=128)
-    port = models.IntegerField()
+    name = models.CharField(max_length=128)
 
     def __str__(self):
-        return '{}:{}'.format(self.host, self.port)
+        return '{}'.format(self.name)
 
     class Meta:
-        ordering = ['shard', 'host']
-        unique_together = (('host', 'port',),)
-        verbose_name_plural = 'prometheis'
+        ordering = ['shard', 'name']
+        unique_together = (('name',),)
+        verbose_name_plural = 'queues'

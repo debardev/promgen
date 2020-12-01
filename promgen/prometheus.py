@@ -62,7 +62,7 @@ def render_rules(rules=None):
     other related objects that are mostly used for the sub lookups.
     '''
     if rules is None:
-        rules = models.Rule.objects.all()
+        rules = models.Rule.objects.filter(enabled=True)
 
     return renderers.RuleRenderer().render(
         serializers.AlertRuleSerializer(rules, many=True).data
@@ -140,7 +140,7 @@ def render_config(service=None, project=None):
     return json.dumps(data, indent=2, sort_keys=True)
 
 
-def import_rules_v2(config, content_object=None):
+def import_rules_v2(config, content_object=None, of_type='prometheus'):
     '''
     Loop through a dictionary and add rules to the database
 
@@ -166,6 +166,7 @@ def import_rules_v2(config, content_object=None):
             annotations = r.get('annotations', {})
 
             defaults = {
+                'type': of_type,
                 'clause': r['expr'],
                 'duration': r['for'],
             }
@@ -182,6 +183,7 @@ def import_rules_v2(config, content_object=None):
                 defaults['obj'] = models.Site.objects.get_current()
 
             rule, created = models.Rule.objects.get_or_create(
+                object_id=defaults['obj'].pk,
                 name=r['alert'],
                 defaults=defaults
             )
