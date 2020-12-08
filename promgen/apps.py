@@ -84,6 +84,14 @@ def default_shard(sender, apps, interactive, **kwargs):
         )
 
 
+def default_site(sender, apps, interactive, **kwargs):
+    Site = apps.get_model('sites.Site')
+    site, created = Site.objects.get_or_create(id=settings.SITE_ID)
+    site.domain = util.setting("site.domain", 'promgen.service.com')
+    site.name = 'promgen'
+    site.save()
+
+
 class PromgenConfig(AppConfig):
     name = "promgen"
 
@@ -92,3 +100,4 @@ class PromgenConfig(AppConfig):
 
         post_migrate.connect(default_shard, sender=self)
         post_migrate.connect(default_admin, sender=self)
+        post_migrate.connect(default_site, sender=self)

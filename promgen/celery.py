@@ -10,7 +10,7 @@ import celery
 import yaml
 
 from celery.signals import celeryd_after_setup
-from django.db import OperationalError
+from django.db import DatabaseError
 
 from kubernetes import client, config, watch
 
@@ -62,8 +62,8 @@ def rules_watch_task(self):
                         logger.debug('Created service %s', service)
 
                     counters = import_rules_v2({'groups': [group]}, service)
-                except OperationalError as op_err:
-                    print("Import failed because of operational db error: %s" % op_err)
+                except DatabaseError as db_err:
+                    print("Import failed because of db error: %s" % db_err)
                 else:
                     print("Imported: %s" % counters)
             try:
@@ -104,8 +104,8 @@ def loki_rules_watch_task(self):
                             logger.debug('Created service %s', service)
 
                         counters = import_rules_v2({'groups': [group]}, service, of_type='loki')
-                    except OperationalError as op_err:
-                        print("Import failed because of operational db error: %s" % op_err)
+                    except DatabaseError as db_err:
+                        print("Import failed because of db error: %s" % db_err)
                     else:
                         print("Imported: %s" % counters)
                 try:
