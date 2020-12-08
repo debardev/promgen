@@ -987,7 +987,8 @@ class ApiQueue(View):
 
 class Commit(LoginRequiredMixin, View):
     def post(self, request):
-        signals.trigger_write_config.send(request)
+        # signals.trigger_write_config.send(request)
+        signals.trigger_write_rules.send(request)
         return HttpResponseRedirect(request.POST.get('next', '/'))
 
 

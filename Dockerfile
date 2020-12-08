@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED 1
 ENV PIP_NO_CACHE_DIR off
 ENV PROMGEN_CONFIG_DIR=/etc/promgen
 
-RUN adduser -D -u 1000 promgen promgen
+RUN adduser -D -u 1001 -g promgen promgen
 
 # Upgrade Pip
 RUN pip install --no-cache-dir -U pip==20.0.2
@@ -52,7 +52,7 @@ COPY promgen/tests/examples/promgen.yml /etc/promgen/promgen.yml
 WORKDIR /usr/src/app
 RUN pip install --no-cache-dir -e .
 
-USER promgen
+USER 1001
 EXPOSE 8000
 
 RUN SECRET_KEY=1 promgen collectstatic --noinput

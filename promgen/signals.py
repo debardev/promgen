@@ -137,12 +137,11 @@ post_delete.connect(delete_log, sender=models.URL)
 @receiver(post_save, sender=models.Rule)
 def save_rule(sender, instance, **kwargs):
     prometheus.check_rules([instance])
-    trigger_write_rules.send(instance)
 
 
 @receiver(post_delete, sender=models.Rule)
 def delete_rule(sender, instance, **kwargs):
-    trigger_write_rules.send(instance)
+    pass
 
 
 @receiver(post_save, sender=models.URL)

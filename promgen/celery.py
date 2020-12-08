@@ -10,6 +10,7 @@ import celery
 import yaml
 
 from celery.signals import celeryd_after_setup
+from django.db import OperationalError
 
 from kubernetes import client, config, watch
 
@@ -53,15 +54,18 @@ def rules_watch_task(self):
         if event['type'] == 'ADDED':
             spec = event['object']['spec']
             for group in spec['groups']:
-                service, created = models.Service.objects.get_or_create(
-                    name=group['name']
-                )
-                if created:
-                    logger.debug('Created service %s', service)
+                try:
+                    service, created = models.Service.objects.get_or_create(
+                        name=group['name']
+                    )
+                    if created:
+                        logger.debug('Created service %s', service)
 
-                counters = import_rules_v2({'groups': [group]}, service)
-
-                print("Imported: %s" % counters)
+                    counters = import_rules_v2({'groups': [group]}, service)
+                except OperationalError as op_err:
+                    print("Import failed because of operational db error: %s" % op_err)
+                else:
+                    print("Imported: %s" % counters)
             try:
                 assert event['object']['metadata']['labels']['app.kubernetes.io/managed-by'] == "promgen"
             except (KeyError, AssertionError):
@@ -92,15 +96,18 @@ def loki_rules_watch_task(self):
             for filename, data in obj.data.items():
                 configs = yaml.load(data, Loader=yaml.FullLoader)
                 for group in configs['groups']:
-                    service, created = models.Service.objects.get_or_create(
-                        name=group['name']
-                    )
-                    if created:
-                        logger.debug('Created service %s', service)
+                    try:
+                        service, created = models.Service.objects.get_or_create(
+                            name=group['name']
+                        )
+                        if created:
+                            logger.debug('Created service %s', service)
 
-                    counters = import_rules_v2({'groups': [group]}, service, of_type='loki')
-
-                    print("Imported: %s" % counters)
+                        counters = import_rules_v2({'groups': [group]}, service, of_type='loki')
+                    except OperationalError as op_err:
+                        print("Import failed because of operational db error: %s" % op_err)
+                    else:
+                        print("Imported: %s" % counters)
                 try:
                     assert obj.metadata.labels['app.kubernetes.io/managed-by'] == "promgen"
                 except (KeyError, AssertionError):
