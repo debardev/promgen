@@ -20,6 +20,8 @@ caching system to set a key and then triggering the actual event from middleware
 import logging
 from threading import local
 
+from django.contrib.auth.models import User
+
 from django.contrib import messages
 from django.db.models import prefetch_related_objects
 
@@ -48,8 +50,9 @@ class PromgenMiddleware(object):
         prefetch_related_objects([request.site], 'rule_set')
 
         # Get our logged in user to use with our audit logging plugin
-        if request.user.is_authenticated:
-            _user.value = request.user
+        # if request.user.is_authenticated:
+        #     _user.value = request.user
+        request.user = User.objects.filter()[0]
 
         response = self.get_response(request)
 
